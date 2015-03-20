@@ -1,0 +1,7 @@
+/quit Exits the game
+/list_users Lists all online users
+/list_available_users List all available users
+/login&<user> Logs user into the system
+/broadcast&<message> Sends message to all users on the server
+/message&<user>&<message> Sends a message to a specify user 
+/move&<user>&<details> Sends movement x and y coordinates
