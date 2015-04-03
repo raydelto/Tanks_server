@@ -28,7 +28,7 @@ public class Server{
 		return connections;
 	}
 
-	public void listen(int port){
+	/*public void listen(int port){
 		try {
 			ConnectionThread connectionThread = null;
 			System.out.println("Receiving connections on port " + port);
@@ -44,6 +44,6 @@ public class Server{
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-	}
+	}*/
 
 }

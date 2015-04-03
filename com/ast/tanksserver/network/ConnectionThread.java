@@ -1,20 +1,30 @@
 package com.ast.tanksserver.network;
 
 import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+
+import org.java_websocket.WebSocket;
+import org.java_websocket.framing.Framedata;
+import org.java_websocket.handshake.ClientHandshake;
+import org.java_websocket.server.WebSocketServer;
 
 import com.ast.tanksserver.users.UserHandler;
 
-public class ConnectionThread extends Thread{
+public class ConnectionThread extends WebSocketServer{
 	
 	private Socket client;
 	private PrintWriter writer;
 	private BufferedReader reader;
 	private boolean connected;
 	private UserHandler userHandler;
+	private int port;
+	private HashMap<WebSocket,String> roles;
 	
 	public Socket getClient() {
 		return client;
@@ -28,6 +38,14 @@ public class ConnectionThread extends Thread{
 		return reader;
 	}
 	
+
+	public ConnectionThread( int port ) throws UnknownHostException {		
+		super( new InetSocketAddress( port ) );
+		this.port = port;
+		roles = new HashMap<WebSocket,String>();
+	}
+	
+	/*
 	 public ConnectionThread(Socket client) {
 		this.client  = client;
 		try {
@@ -38,72 +56,71 @@ public class ConnectionThread extends Thread{
 		} catch (IOException e) {
 			e.printStackTrace();
 		}		
-	}
+	}*/
 	
 	public void sendMessage(String message){
 		writer.println(message);
-	}
+	}	
 	 
+	@Override
+	public void onOpen( WebSocket conn, ClientHandshake handshake ) {
+		/*conn.send("Hola Visitante2");
+		this.sendToAll( "new connection: " + handshake.getResourceDescriptor() );*/
+		if(!roles.containsValue("ATTACK")){
+			roles.put(conn,"ATTACK");
+			conn.send("A");
+			System.out.println("ATTACKER Joined");
+		}else if(!roles.containsValue("DEFENSE")){
+			roles.put(conn, "DEFENSE");
+			conn.send("D");
+			System.out.println("Defense Joined");
+		}else{
+			conn.send("E");//ESPECTATOR
+			System.out.println("Espectator Joined");
+		}
+			
+			
+		System.out.println( conn.getRemoteSocketAddress().getAddress().getHostAddress() + " entered the room!" );
+	}
+
+	@Override
+	public void onClose( WebSocket conn, int code, String reason, boolean remote ) {
+		this.sendToAll( conn + " has left the room!" );		
+		System.out.println( conn + "(" + roles.get(conn)+") has left the room!" );
+		roles.remove(conn);
+	}
+
+	@Override
+	public void onMessage( WebSocket conn, String message ) {
+		this.sendToAll( message,conn );
+		System.out.println( conn + ": " + message );
+	}
+
+	@Override
+	public void onFragment( WebSocket conn, Framedata fragment ) {
+		System.out.println( "received fragment: " + fragment );
+	}
 	
 	@Override
-	public void run() {
-		String message = null;
-		try {
-			while(  (message = reader.readLine()) != null && connected) {
-				System.out.println("Message received: " + message);
-				try {
-					handleMessage(message);
-				} catch (Exception e) {
-					System.err.println("Error while handling message");
-					e.printStackTrace();
-				}
-			}
-		} catch (IOException e) {
-			System.err.println("Error while reading peer message.");
-			e.printStackTrace();
-		}		
+	public void onError( WebSocket conn, Exception ex ) {
+		ex.printStackTrace();
+		if( conn != null ) {
+			// some errors like port binding failed may not be assignable to a specific websocket
+		}
 	}
 	
-	private void handleMessage(String message) throws Exception{
-		String command = message.split("&")[0];
-		System.out.println("message: " + message + " , command : " + command);
-		String nickname;
-		switch(command){
-		case "/quit":	
-			writer.println("Good bye!");
-			connected = false;
-			try {
-				client.close();
-				reader.close();
-			} catch (IOException e) {
-				System.err.println("Error while closing connection.");
-
-				e.printStackTrace();
+	public void sendToAll( String text) {
+		sendToAll(text,null);
+	}
+	
+	public void sendToAll( String text ,  WebSocket conn) {
+		Collection<WebSocket> con = connections();
+		synchronized ( con ) {
+			for( WebSocket c : con ) {
+				if(c != conn){
+					c.send( text );
+				}
 			}
-			break;
-		case "/list_users":
-			userHandler.printUsers(writer, userHandler.getUsers());
-			break;
-		case "/list_available_users":
-			userHandler.printUsers(writer, userHandler.getUsers());
-			break;
-		case "/login":
-			nickname = message.split("&")[1];
-			if(userHandler.isNicknameAvailable(nickname)){
-				writer.println("Nickname " + nickname + " registered successfully.");
-				userHandler.login(nickname, this);
-			}else{
-				writer.println("Nickname " + nickname + " is already in use.");
-			}
-			break;
-		case "/move":
-			String[] parts = message.split("&");
-			nickname = parts[1];
-			String play = parts[2];	
-			userHandler.sendMessage(nickname, play);
-			break;
-		default:
-			writer.println("Unknown command: " + message);
 		}
 	}
 
